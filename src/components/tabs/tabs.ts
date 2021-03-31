@@ -93,6 +93,7 @@ export class CoreTabsComponent implements OnInit, AfterViewInit, OnChanges, OnDe
     protected unregisterBackButtonAction: any;
     protected languageChangedSubscription: Subscription;
     protected isInTransition = false; // Weather Slides is in transition.
+    protected isWindowResized = false; // Window resized.
 
     constructor(element: ElementRef, protected content: Content, protected domUtils: CoreDomUtilsProvider,
             protected appProvider: CoreAppProvider, private configProvider: CoreConfigProvider, platform: Platform,
@@ -382,7 +383,7 @@ export class CoreTabsComponent implements OnInit, AfterViewInit, OnChanges, OnDe
         this.slides.update();
         this.slides.resize();
 
-        if (!this.hasSliddenToInitial && this.selected && this.selected >= this.slidesShown) {
+        if (!this.hasSliddenToInitial && this.selected && this.selected >= this.slidesShown || this.isWindowResized) {
             this.hasSliddenToInitial = true;
             this.shouldSlideToInitial = true;
 
@@ -390,6 +391,7 @@ export class CoreTabsComponent implements OnInit, AfterViewInit, OnChanges, OnDe
                 if (this.shouldSlideToInitial) {
                     this.slides.slideTo(this.selected, 0);
                     this.shouldSlideToInitial = false;
+                    this.isWindowResized = false;
                     this.updateAriaHidden(); // Slide's slideTo() sets aria-hidden to true, update it.
                 }
             }, 400);
@@ -637,6 +639,7 @@ export class CoreTabsComponent implements OnInit, AfterViewInit, OnChanges, OnDe
      */
     protected windowResized(): void {
         setTimeout(() => {
+            this.isWindowResized = true;
             this.calculateSlides();
         });
     }
