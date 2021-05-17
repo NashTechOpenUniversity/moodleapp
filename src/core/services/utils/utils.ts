@@ -931,7 +931,7 @@ export class CoreUtilsProvider {
         }
 
         try {
-            await FileOpener.open(path, mimetype || '');
+            await FileOpener.showOpenWithDialog(path, mimetype || '');
         } catch (error) {
             this.logger.error('Error opening file ' + path + ' with mimetype ' + mimetype);
             this.logger.error('Error: ', JSON.stringify(error));
