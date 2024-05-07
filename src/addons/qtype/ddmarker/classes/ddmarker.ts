@@ -15,7 +15,7 @@
 import { CoreDomUtils } from '@services/utils/dom';
 import { CoreTextUtils } from '@services/utils/text';
 import { CoreCoordinates, CoreDom } from '@singletons/dom';
-import { CoreEventObserver } from '@singletons/events';
+import { CoreEventObserver, CoreEvents } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonQtypeDdMarkerQuestionData } from '../component/ddmarker';
 import { AddonQtypeDdMarkerGraphicsApi } from './graphics_api';
@@ -701,6 +701,62 @@ export class AddonQtypeDdMarkerQuestion {
                 this.redrawDragsAndDrops();
             });
 
+            CoreEvents.on(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, (node: { node: HTMLElement }) => {
+                let currentFilteredItem = (node.node) as HTMLElement;
+                const parentIsMarker: boolean = (currentFilteredItem
+                    ?.parentNode as HTMLElement)
+                    ?.closest('span.marker') instanceof HTMLElement;
+                const isMarker: boolean = currentFilteredItem.classList.contains('marker');
+                const root = this.container;
+
+                // The filtered element or parent element should a drag or drop item.
+                if (!parentIsMarker && !isMarker) {
+                    return;
+                }
+                if (parentIsMarker) {
+                    currentFilteredItem = (currentFilteredItem?.parentNode as HTMLElement).closest('span.marker') as HTMLElement;
+                }
+                if (!root.contains(currentFilteredItem)) {
+                    // If the maker doesn't belong to this question
+                    // In case we have multiple questions in the same page.
+                    return;
+                }
+                const dragNo = this.getDragNo(currentFilteredItem);
+                const choiceNo = this.getChoiceNoFromElement(currentFilteredItem);
+                const listOfContainerToBeModifed: string[] = [
+                    'div.draghomes .marker:not(.dragplaceholder).dragno' + dragNo + '.choice' + choiceNo,
+                    'div.droparea .marker:not(.dragplaceholder).dragno' + dragNo + '.choice' + choiceNo,
+                    'div.draghomes .marker:not(.dragplaceholder).infinite.choice' + choiceNo,
+                    'div.droparea .marker:not(.dragplaceholder).infinite.choice' + choiceNo,
+                ];
+                const listOfModifiedDragDrop: HTMLElement[] = [];
+                const cloneElement = currentFilteredItem.cloneNode(true) as HTMLElement;
+                const that = this;
+                listOfContainerToBeModifed.forEach(function(selector: string) {
+                    const elm = root.querySelector(selector);
+                    if (elm === null) {
+                        return;
+                    }
+                    const originalClass = elm.getAttribute('class');
+                    const originalStyle = elm.getAttribute('style');
+                    // Replace the class and style of the maker we want to replace for the clone.
+                    if (originalClass) {
+                        cloneElement.setAttribute('class', originalClass);
+                    }
+                    if (originalStyle) {
+                        cloneElement.setAttribute('style', originalStyle);
+                    }
+                    if (!that.readOnly) {
+                        that.draggable(cloneElement);
+                    }
+                    elm.insertAdjacentElement('beforebegin', cloneElement);
+                    listOfModifiedDragDrop.push(elm as HTMLElement);
+                });
+                if (listOfModifiedDragDrop.length > 0) {
+                    listOfModifiedDragDrop.map(element => element.remove());
+                }
+            });
+
             this.afterImageLoadDone = true;
             this.question.loaded = true;
         };
@@ -717,6 +773,24 @@ export class AddonQtypeDdMarkerQuestion {
         setTimeout(() => {
             this.pollForImageLoad();
         }, 500);
+    }
+
+    getDragNo(element: HTMLElement): number | null {
+        return this.getClassnameNumericSuffix(element, 'dragno');
+    }
+
+    getChoiceNoFromElement(element: HTMLElement): number | null {
+        return this.getClassnameNumericSuffix(element, 'choice');
+    }
+
+    getClassnameNumericSuffix(node: HTMLElement, prefix: string): number | null {
+        const classes = node.classList.value;
+        // Use regular expression to match the number after prefix
+        const regex = new RegExp(prefix + '(\\d+)');
+        const match = classes.match(regex);
+
+        // Extract the number from the matched substring
+        return match ? parseInt(match[1]) : null;
     }
 
     /**
