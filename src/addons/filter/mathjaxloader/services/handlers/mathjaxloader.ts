@@ -246,6 +246,13 @@ export class AddonFilterMathJaxLoaderHandlerService extends CoreFilterDefaultHan
                     const equations = Array.from(container.querySelectorAll('.filter_mathjaxloader_equation'));
                     equations.forEach((node) => {
                         that.window.MathJax.Hub.Queue(['Typeset', that.window.MathJax.Hub, node], [that.fixUseUrls, node]);
+                        that.window.MathJax.Hub.Queue([(node: Element) => {
+                            // The notifyFilterContentRenderingComplete event takes an Array of NodeElements or a NodeList.
+                            // We cannot create a NodeList, so we use an HTMLElement[].
+                            CoreEvents.trigger(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, {
+                                node,
+                            }, CoreSites.getCurrentSiteId());
+                        }, node]);
                     });
 
                     // Set the delay back to normal after processing.

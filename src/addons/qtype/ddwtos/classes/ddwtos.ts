@@ -17,7 +17,7 @@ import { CoreTextUtils } from '@services/utils/text';
 import { CoreUtils } from '@services/utils/utils';
 import { CoreDirectivesRegistry } from '@singletons/directives-registry';
 import { CoreCoordinates, CoreDom } from '@singletons/dom';
-import { CoreEventObserver } from '@singletons/events';
+import { CoreEventObserver, CoreEvents } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonModQuizDdwtosQuestionData } from '../component/ddwtos';
 
@@ -210,6 +210,63 @@ export class AddonQtypeDdwtosQuestion {
         this.resizeListener = CoreDom.onWindowResize(() => {
             this.positionDragItems();
         });
+
+
+         CoreEvents.on(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, (node: { node: HTMLElement }) => {
+            let currentFilteredItem = (node.node) as HTMLElement;
+            const parentIsDD = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('placed') ||
+                (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('draghome');
+            const isDD: boolean = currentFilteredItem.classList.contains('placed') || currentFilteredItem.classList.contains('draghome');
+            if (!parentIsDD && !isDD) {
+                return;
+            }
+            if (parentIsDD) {
+                currentFilteredItem = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span') as HTMLElement;
+            }
+            const root = this.container;
+            if (!root.contains(currentFilteredItem)) {
+                // If the DD item doesn't belong to this question
+                // In case we have multiple questions in the same page.
+                return;
+            }
+            const group = this.getGroup(currentFilteredItem),
+                choice = this.getChoice(currentFilteredItem);
+
+            let listOfModifiedDragDrop: Element[] = [];
+            const cloneElement = currentFilteredItem.cloneNode(true) as HTMLElement;
+            const nodeList = root.querySelectorAll('.addon-qtype-ddwtos-container .group' + group + '.choice' + choice);
+            const that = this;
+            nodeList.forEach(function(node) {
+                // Same modified item, skip it.
+                if (node === currentFilteredItem) {
+                    return;
+                }
+                const originalClass = (node as HTMLElement).getAttribute('class');
+                const originalStyle = (node as HTMLElement).getAttribute('style');
+                // We want to keep all the handler and event for filtered item, so using clone is the only choice.
+                const filteredDragDropClone = currentFilteredItem.cloneNode(true) as HTMLElement;
+                // Replace the class and style of the drag drop item we want to replace for the clone.
+                if (originalClass !== null) {
+                    filteredDragDropClone.setAttribute('class', originalClass);
+                }
+                if (originalStyle !== null) {
+                    filteredDragDropClone.setAttribute('style', originalStyle);
+                }
+                if (!that.readOnly) {
+                    that.makeDraggable(cloneElement);
+                }
+                // Insert into DOM.
+                if (node.parentNode !== null) {
+                    node.parentNode.insertBefore(filteredDragDropClone, node);
+                }
+                // Add the item has been replaced to a list so we can remove it later.
+                listOfModifiedDragDrop.push(node);
+            });
+            listOfModifiedDragDrop.map(function(node) {
+                node.remove();
+            });
+
+         });
     }
 
     /**
@@ -327,7 +384,11 @@ export class AddonQtypeDdwtosQuestion {
     protected padToWidthHeight(node: HTMLElement, width: number, height: number): void {
         node.style.width = width + 'px';
         node.style.height = height + 'px';
-        // Originally lineHeight was set as height to center the text but it comes on too height lines on multiline elements.
+
+        // // Make an elements alignment.
+        // node.style.lineHeight = height + 'px';
+        // node.style.textAlign = 'center';
+        // node.style.verticalAlign ='middle';
     }
 
     /**
@@ -480,9 +541,9 @@ export class AddonQtypeDdwtosQuestion {
             return;
         }
 
-        groupItems.forEach((item) => {
-            item.innerHTML = CoreTextUtils.decodeHTML(item.innerHTML);
-        });
+        // groupItems.forEach((item) => {
+        //     item.innerHTML = CoreTextUtils.decodeHTML(item.innerHTML);
+        // });
 
         // Wait to render in order to calculate size.
         if (groupItems[0].parentElement) {

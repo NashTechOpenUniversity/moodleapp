@@ -116,6 +116,7 @@ export class CoreEvents {
     static readonly COMPLETE_REQUIRED_PROFILE_DATA_FINISHED = 'complete_required_profile_data_finished';
     static readonly MAIN_HOME_LOADED = 'main_home_loaded';
     static readonly FULL_SCREEN_CHANGED = 'full_screen_changed';
+    static readonly FILTER_CONTENT_RENDERING_COMPLETE = 'core_filters_content_rendering_complete';
 
     protected static logger = CoreLogger.getInstance('CoreEvents');
     protected static observables: { [eventName: string]: Subject<unknown> } = {};
