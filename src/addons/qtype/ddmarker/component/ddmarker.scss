@@ -80,6 +80,9 @@ core-format-text ::ng-deep {
     div.ddarea {
         text-align: center;
         position: relative;
+        div.dd-original.d-none {
+            display: none;
+        }
     }
     div.ddarea .dropzones,
     div.ddarea .markertexts {
