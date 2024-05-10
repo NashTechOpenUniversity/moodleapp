@@ -67,6 +67,10 @@ export class CoreDom {
         // Get the top, left coordinates of two elements
         const elementRectangle = element.getBoundingClientRect();
         const parentRectangle = parent.getBoundingClientRect();
+        // console.log(element);
+        // console.log(elementRectangle);
+        // console.log(parent);
+        // console.log(parentRectangle);
 
         // Calculate the top and left positions.
         return {

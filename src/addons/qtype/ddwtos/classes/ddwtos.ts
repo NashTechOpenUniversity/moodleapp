@@ -17,7 +17,7 @@ import { CoreTextUtils } from '@services/utils/text';
 import { CoreUtils } from '@services/utils/utils';
 import { CoreDirectivesRegistry } from '@singletons/directives-registry';
 import { CoreCoordinates, CoreDom } from '@singletons/dom';
-import { CoreEventObserver } from '@singletons/events';
+import { CoreEventObserver, CoreEvents } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonModQuizDdwtosQuestionData } from '../component/ddwtos';
 
@@ -48,7 +48,7 @@ export class AddonQtypeDdwtosQuestion {
         protected inputIds: string[],
     ) {
         this.logger = CoreLogger.getInstance('AddonQtypeDdwtosQuestion');
-
+        this.handleFilterItems();
         this.initializer();
     }
 
@@ -208,6 +208,87 @@ export class AddonQtypeDdwtosQuestion {
         this.positionDragItems();
 
         this.resizeListener = CoreDom.onWindowResize(() => {
+            this.positionDragItems();
+        });
+    }
+
+    handleFilterItems(): void {
+        const size = {};
+        CoreEvents.on(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, (node: { node: HTMLElement }) => {
+            let currentFilteredItem = (node.node) as HTMLElement;
+            const parentIsDD = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('placed') ||
+                (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('draghome');
+            const isDD: boolean = currentFilteredItem.classList.contains('placed') ||
+                currentFilteredItem.classList.contains('draghome');
+            if (!parentIsDD && !isDD) {
+                return;
+            }
+            if (parentIsDD) {
+                currentFilteredItem = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span') as HTMLElement;
+            }
+            const root = this.container;
+            if (!root.contains(currentFilteredItem)) {
+                // If the DD item doesn't belong to this question
+                // In case we have multiple questions in the same page.
+                return;
+            }
+            const group = this.getGroup(currentFilteredItem);
+            const choice = this.getChoice(currentFilteredItem);
+
+            const listOfModifiedDragDrop: Element[] = [];
+            const nodeList = root.querySelectorAll('.addon-qtype-ddwtos-container .group' + group + '.choice' + choice);
+            nodeList.forEach(nodex => {
+                // Same modified item, skip it.
+                if (nodex === currentFilteredItem) {
+                    return;
+                }
+                const originalClass = (nodex as HTMLElement).getAttribute('class');
+                const originalStyle = (nodex as HTMLElement).getAttribute('style');
+                // We want to keep all the handler and event for filtered item, so using clone is the only choice.
+                const filteredDragDropClone = currentFilteredItem.cloneNode(true) as HTMLElement;
+                // Replace the class and style of the drag drop item we want to replace for the clone.
+                if (originalClass !== null) {
+                    filteredDragDropClone.setAttribute('class', originalClass);
+                }
+                if (originalStyle !== null) {
+                    filteredDragDropClone.setAttribute('style', originalStyle);
+                }
+                if (!this.readOnly) {
+                    this.makeDraggable(filteredDragDropClone);
+                }
+                // Insert into DOM.
+                nodex.insertAdjacentElement('beforebegin', filteredDragDropClone);
+                // Add the item has been replaced to a list so we can remove it later.
+                listOfModifiedDragDrop.push(nodex);
+            });
+
+            const xxxList = document.querySelectorAll('.addon-qtype-ddwtos-container .drag.group' + group);
+
+            xxxList.forEach(element => {
+                if (size[group ?? 0] === undefined) {
+                    size[group ?? 0] = { width: 0, height: 0 };
+                }
+                size[group ?? 0].width =  Math.max(
+((node.node) as HTMLElement).offsetWidth,
+                    size[group ?? 0]?.width ?? 0,
+);
+                size[group ?? 0].height =  Math.max(
+((node.node) as HTMLElement).offsetHeight,
+                    size[group ?? 0]?.height ?? 0,
+);
+            });
+
+            document.querySelectorAll('.addon-qtype-ddwtos-container .group' + group).forEach(element => {
+                (element as HTMLElement).style.width = size[group ?? 0].width + 'px';
+                (element as HTMLElement).style.height = size[group ?? 0].height + 'px';
+            });
+
+            if (listOfModifiedDragDrop.length > 0) {
+                listOfModifiedDragDrop.map(function(node) {
+                    node.remove();
+                });
+            }
+
             this.positionDragItems();
         });
     }
@@ -414,6 +495,7 @@ export class AddonQtypeDdwtosQuestion {
      */
     positionDragItems(): void {
         const drags = Array.from(this.container.querySelectorAll<HTMLElement>(this.selectors.drags()));
+        console.log(drags);
         drags.forEach((drag) => {
             this.positionDragItem(drag);
         });
@@ -480,9 +562,9 @@ export class AddonQtypeDdwtosQuestion {
             return;
         }
 
-        groupItems.forEach((item) => {
-            item.innerHTML = CoreTextUtils.decodeHTML(item.innerHTML);
-        });
+        // groupItems.forEach((item) => {
+        //     item.innerHTML = CoreTextUtils.decodeHTML(item.innerHTML);
+        // });
 
         // Wait to render in order to calculate size.
         if (groupItems[0].parentElement) {
@@ -493,6 +575,8 @@ export class AddonQtypeDdwtosQuestion {
             await CoreDom.waitToBeInDOM(groupItems[0]);
             await CoreUtils.nextTicks(5);
         }
+
+        console.log('xxx', groupItems);
 
         // Find max height and width.
         let maxWidth = 0;

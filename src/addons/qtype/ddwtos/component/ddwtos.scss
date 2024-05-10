@@ -30,7 +30,10 @@ core-format-text ::ng-deep, .drags ::ng-deep {
         cursor: pointer;
     }
     .draghome, .drag {
-        display: inline-block;
+        // display: inline-block;
+        display: flex;
+        justify-content: center;
+        align-items: center;
         text-align: center;
         background: transparent;
         border: 0;
@@ -69,6 +72,12 @@ core-format-text ::ng-deep, .drags ::ng-deep {
     &.readonly .drop,
     &.readonly .answercontainer {
         cursor: default;
+    }
+
+    .answercontainer > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
     }
 
     span.incorrect {
