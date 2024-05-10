@@ -16,6 +16,7 @@ import { CoreDom } from '@singletons/dom';
 import { CoreEventObserver } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonModQuizDdImageOrTextQuestionData } from '../component/ddimageortext';
+import { CoreEvents } from '@singletons/events';
 
 /**
  * Class to make a question of ddimageortext type work.
@@ -440,7 +441,6 @@ export class AddonQtypeDdImageOrTextQuestion {
             // Already done, stop.
             return;
         }
-
         if (this.toLoad <= 0) {
             // All images loaded.
             this.createAllDragAndDrops();
@@ -452,6 +452,127 @@ export class AddonQtypeDdImageOrTextQuestion {
         setTimeout(() => {
             this.pollForImageLoad();
         }, 1000);
+        CoreEvents.on(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, (node: { node: HTMLElement }) => {
+            if (this.afterImageLoadDone) {
+                // We only need to modified Drag/Drop if the question already loaded.
+                this.changeAllDragsAndDropsToFilteredContent(node.node);
+            }
+        });
+    }
+
+    /**
+     * Modify the content drag/drop element in the same group and position them.
+     *
+     * @param filteredElement the drag/drop element that has been modified by filter.
+     */
+    changeAllDragsAndDropsToFilteredContent(filteredElement: HTMLElement) : void {
+        let currentFilteredItem = (filteredElement) as HTMLElement;
+        const parentIsDD: boolean = (currentFilteredItem?.parentNode as HTMLElement)
+                ?.closest('div.placed') instanceof HTMLElement ||
+            (currentFilteredItem?.parentNode as HTMLElement)?.classList.contains('draghome');
+        const isDD: boolean = currentFilteredItem.classList.contains('placed') ||
+            currentFilteredItem.classList.contains('draghome');
+        const root = this.container;
+        // The filtered element or parent element should a drag or drop item.
+        if (!parentIsDD && !isDD) {
+            return;
+        }
+        if (parentIsDD) {
+            currentFilteredItem = (currentFilteredItem?.parentNode as HTMLElement)
+                .closest('div') as HTMLElement;
+        }
+        if (!root.contains(currentFilteredItem)) {
+            // If the DD item doesn't belong to this question
+            // In case we have multiple questions in the same page.
+            return;
+        }
+        const group = this.getGroup(currentFilteredItem),
+              choice = this.getChoice(currentFilteredItem);
+        const listOfModifiedDragDrop: HTMLElement[] = [];
+        const thisQ = this;
+        root.querySelectorAll('.group' + group + '.choice' + choice + '.drag').forEach(function(node, i) {
+            if (currentFilteredItem === node) {
+                return;
+            }
+            const cloneElement = currentFilteredItem.cloneNode(true) as HTMLElement;
+            const originalClass = node.getAttribute('class');
+            const originalStyle = node.getAttribute('style');
+            const dragItemNo = thisQ.getDragItemNo(node as HTMLElement);
+            const dragInstance = thisQ.getDragInstance(node as HTMLElement);
+            // Replace custom attribute.
+            if (dragItemNo) {
+                cloneElement.setAttribute('dragitemno', String(dragItemNo));
+            }
+            if (dragInstance) {
+                cloneElement.setAttribute('draginstanceno', String(dragInstance));
+            }
+            // Replace the class and style.
+            if (originalClass) {
+                cloneElement.setAttribute('class', originalClass);
+            }
+            if (originalStyle) {
+                cloneElement.setAttribute('style', originalStyle);
+            }
+            thisQ.draggableForQuestion(cloneElement, group, choice);
+            node.insertAdjacentElement('beforebegin', cloneElement);
+            listOfModifiedDragDrop.push(node as HTMLElement);
+        });
+        if (listOfModifiedDragDrop.length > 0) {
+            listOfModifiedDragDrop.map(element => element.remove());
+        }
+        // // All drag/drop items have been modified, position them.
+        this.repositionDragsForQuestion();
+    }
+
+    /**
+     * Get choice from a drag element.
+     *
+     * @param drag
+     */
+    getChoice(drag: HTMLElement) {
+        return this.getClassnameNumericSuffix(drag, 'choice') ?? 0;
+    };
+
+    /**
+     * Get drag item number from a drag element.
+     *
+     * @param drag
+     */
+    getDragItemNo(drag: HTMLElement) {
+        return this.getClassnameNumericSuffix(drag, 'dragitems');
+    }
+
+    /**
+     * Get drag instance number from a drag element.
+     *
+     * @param drag
+     */
+    getDragInstance(drag: HTMLElement) {
+        return this.getClassnameNumericSuffix(drag, 'draginstance');
+    }
+
+    /**
+     *
+     * @param node
+     */
+    getGroup(drag: HTMLElement) {
+        return this.getClassnameNumericSuffix(drag, 'group') ?? 0;
+    };
+
+    /**
+     * Get a number from a class suffix.
+     *
+     * @param node
+     * @param prefix
+     */
+    getClassnameNumericSuffix(node: HTMLElement, prefix: string): number | null {
+        const classes = node.classList.value;
+        // Use regular expression to match the number after prefix
+        const regex = new RegExp(prefix + '(\\d+)');
+        const match = classes.match(regex);
+
+        // Extract the number from the matched substring
+        return match ? parseInt(match[1]) : null;
     }
 
     /**
