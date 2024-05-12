@@ -13,10 +13,9 @@
 // limitations under the License.
 
 import { CoreDom } from '@singletons/dom';
-import { CoreEventObserver } from '@singletons/events';
+import { CoreEventObserver, CoreEvents } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonModQuizDdImageOrTextQuestionData } from '../component/ddimageortext';
-import { CoreEvents } from '@singletons/events';
 
 /**
  * Class to make a question of ddimageortext type work.
@@ -465,7 +464,7 @@ export class AddonQtypeDdImageOrTextQuestion {
      *
      * @param filteredElement the drag/drop element that has been modified by filter.
      */
-    changeAllDragsAndDropsToFilteredContent(filteredElement: HTMLElement) : void {
+    changeAllDragsAndDropsToFilteredContent(filteredElement: HTMLElement): void {
         let currentFilteredItem = (filteredElement) as HTMLElement;
         const parentIsDD: boolean = (currentFilteredItem?.parentNode as HTMLElement)
                 ?.closest('div.placed') instanceof HTMLElement ||
@@ -486,19 +485,18 @@ export class AddonQtypeDdImageOrTextQuestion {
             // In case we have multiple questions in the same page.
             return;
         }
-        const group = this.getGroup(currentFilteredItem),
-              choice = this.getChoice(currentFilteredItem);
+        const group = this.getGroup(currentFilteredItem);
+        const choice = this.getChoice(currentFilteredItem);
         const listOfModifiedDragDrop: HTMLElement[] = [];
-        const thisQ = this;
-        root.querySelectorAll('.group' + group + '.choice' + choice + '.drag').forEach(function(node, i) {
+        root.querySelectorAll('.group' + group + '.choice' + choice + '.drag').forEach((node) => {
             if (currentFilteredItem === node) {
                 return;
             }
             const cloneElement = currentFilteredItem.cloneNode(true) as HTMLElement;
             const originalClass = node.getAttribute('class');
             const originalStyle = node.getAttribute('style');
-            const dragItemNo = thisQ.getDragItemNo(node as HTMLElement);
-            const dragInstance = thisQ.getDragInstance(node as HTMLElement);
+            const dragItemNo = this.getDragItemNo(node as HTMLElement);
+            const dragInstance = this.getDragInstance(node as HTMLElement);
             // Replace custom attribute.
             if (dragItemNo) {
                 cloneElement.setAttribute('dragitemno', String(dragItemNo));
@@ -513,7 +511,7 @@ export class AddonQtypeDdImageOrTextQuestion {
             if (originalStyle) {
                 cloneElement.setAttribute('style', originalStyle);
             }
-            thisQ.draggableForQuestion(cloneElement, group, choice);
+            this.draggableForQuestion(cloneElement, group, choice);
             node.insertAdjacentElement('beforebegin', cloneElement);
             listOfModifiedDragDrop.push(node as HTMLElement);
         });
@@ -529,17 +527,17 @@ export class AddonQtypeDdImageOrTextQuestion {
      *
      * @param drag
      */
-    getChoice(drag: HTMLElement) {
+    getChoice(drag: HTMLElement): number {
         return this.getClassnameNumericSuffix(drag, 'choice') ?? 0;
-    };
+    }
 
     /**
      * Get drag item number from a drag element.
      *
      * @param drag
      */
-    getDragItemNo(drag: HTMLElement) {
-        return this.getClassnameNumericSuffix(drag, 'dragitems');
+    getDragItemNo(drag: HTMLElement): number {
+        return this.getClassnameNumericSuffix(drag, 'dragitems') ?? 0;
     }
 
     /**
@@ -547,17 +545,18 @@ export class AddonQtypeDdImageOrTextQuestion {
      *
      * @param drag
      */
-    getDragInstance(drag: HTMLElement) {
-        return this.getClassnameNumericSuffix(drag, 'draginstance');
+    getDragInstance(drag: HTMLElement): number {
+        return this.getClassnameNumericSuffix(drag, 'draginstance') ?? 0;
     }
 
     /**
+     * Get group based on drag item.
      *
-     * @param node
+     * @param drag
      */
-    getGroup(drag: HTMLElement) {
+    getGroup(drag: HTMLElement): number {
         return this.getClassnameNumericSuffix(drag, 'group') ?? 0;
-    };
+    }
 
     /**
      * Get a number from a class suffix.
