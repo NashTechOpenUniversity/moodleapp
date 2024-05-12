@@ -17,7 +17,7 @@ import { CoreTextUtils } from '@services/utils/text';
 import { CoreUtils } from '@services/utils/utils';
 import { CoreDirectivesRegistry } from '@singletons/directives-registry';
 import { CoreCoordinates, CoreDom } from '@singletons/dom';
-import { CoreEventObserver } from '@singletons/events';
+import { CoreEventObserver, CoreEvents } from '@singletons/events';
 import { CoreLogger } from '@singletons/logger';
 import { AddonModQuizDdwtosQuestionData } from '../component/ddwtos';
 
@@ -48,8 +48,26 @@ export class AddonQtypeDdwtosQuestion {
         protected inputIds: string[],
     ) {
         this.logger = CoreLogger.getInstance('AddonQtypeDdwtosQuestion');
-
+        // We will decode the HTML content of the answer here to prevent any impact to filter data.
+        this.question.answers = this.decodeHTML(this.question.answers ?? '');
+        this.handleFilterItems();
         this.initializer();
+    }
+
+    decodeHTML(questionString: string): string {
+        if (questionString === '') {
+            return '';
+        }
+        const tempContainer = document.createElement('div');
+        tempContainer.innerHTML = questionString;
+
+        const dragHomeElements = tempContainer.querySelectorAll('span.draghome');
+        dragHomeElements.forEach((element: HTMLElement) => {
+            const content = element.innerHTML;
+            element.innerHTML = CoreTextUtils.decodeHTML(content);
+        });
+
+        return tempContainer.innerHTML;
     }
 
     /**
@@ -208,6 +226,96 @@ export class AddonQtypeDdwtosQuestion {
         this.positionDragItems();
 
         this.resizeListener = CoreDom.onWindowResize(() => {
+            this.positionDragItems();
+        });
+    }
+
+    /**
+     * Handle filter items rendering.
+     * We will replace the old elements with the filtered elements, then recalculate their sizes and positions.
+     */
+    handleFilterItems(): void {
+        CoreEvents.on(CoreEvents.FILTER_CONTENT_RENDERING_COMPLETE, async (node: { node: HTMLElement }) => {
+            let currentFilteredItem = (node.node) as HTMLElement;
+            const parentIsDD = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('placed') ||
+                (currentFilteredItem?.parentNode as HTMLElement)?.closest('span')?.classList.contains('draghome');
+            const isDD: boolean = currentFilteredItem.classList.contains('placed') ||
+                currentFilteredItem.classList.contains('draghome');
+            if (!parentIsDD && !isDD) {
+                return;
+            }
+            if (parentIsDD) {
+                currentFilteredItem = (currentFilteredItem?.parentNode as HTMLElement)?.closest('span') as HTMLElement;
+            }
+            const root = this.container;
+            if (!root.contains(currentFilteredItem)) {
+                // If the DD item doesn't belong to this question
+                // In case we have multiple questions in the same page.
+                return;
+            }
+            const group = this.getGroup(currentFilteredItem) ?? -1;
+            const choice = this.getChoice(currentFilteredItem) ?? -1;
+
+            const listOfModifiedDragDrop: Element[] = [];
+            const nodeList = root.querySelectorAll('.addon-qtype-ddwtos-container .drag.group' + group + '.choice' + choice);
+            let filteredDragDropClone: HTMLElement;
+            nodeList.forEach((node: HTMLElement) => {
+                // Same modified item, skip it.
+                if (node === currentFilteredItem) {
+                    return;
+                }
+                const originalClass = node.getAttribute('class');
+                const originalStyle = node.getAttribute('style');
+                // We want to keep all the handler and event for filtered item, so using clone is the only choice.
+                filteredDragDropClone = currentFilteredItem.cloneNode(true) as HTMLElement;
+                // Replace the class and style of the drag drop item we want to replace for the clone.
+                if (originalClass !== null) {
+                    filteredDragDropClone.setAttribute('class', originalClass);
+                }
+                if (originalStyle !== null) {
+                    filteredDragDropClone.setAttribute('style', originalStyle);
+                    filteredDragDropClone.style.height = 'auto';
+                    filteredDragDropClone.style.width = 'auto';
+                }
+                if (!this.readOnly) {
+                    this.makeDraggable(filteredDragDropClone);
+                }
+                // Insert into DOM.
+                node.insertAdjacentElement('beforebegin', filteredDragDropClone);
+                // Add the item has been replaced to a list so we can remove it later.
+                listOfModifiedDragDrop.push(node);
+            });
+
+            if (listOfModifiedDragDrop.length > 0) {
+                listOfModifiedDragDrop.map(function(node) {
+                    node.remove();
+                });
+            }
+
+            // We need to loop through the elements in the current group to update their latest sizes.
+            const dragItems = root.querySelectorAll('.addon-qtype-ddwtos-container .drag.group' + group);
+
+            let maxWidth = 0;
+            let maxHeight = 0;
+            dragItems.forEach((item: HTMLElement) => {
+                // Remove custom size CSS to obtain the actual size of the element.
+                item.style.height = 'auto';
+                item.style.width = 'auto';
+                // Find the maximum size of the current group.
+                maxWidth = Math.max(maxWidth, Math.ceil(item.offsetWidth));
+                maxHeight = Math.max(maxHeight, Math.ceil(item.offsetHeight));
+            });
+
+            maxWidth += 8;
+            maxHeight += 5;
+
+            // Update the new size.
+            root.querySelectorAll('.addon-qtype-ddwtos-container .group' + group).forEach((element: HTMLElement) => {
+                this.padToWidthHeight(element, maxWidth, maxHeight);
+            });
+            // Set size for drop elements.
+            this.setSizeForDropGroups(group, maxWidth, maxHeight);
+            // Set position again.
             this.positionDragItems();
         });
     }
@@ -480,10 +588,6 @@ export class AddonQtypeDdwtosQuestion {
             return;
         }
 
-        groupItems.forEach((item) => {
-            item.innerHTML = CoreTextUtils.decodeHTML(item.innerHTML);
-        });
-
         // Wait to render in order to calculate size.
         if (groupItems[0].parentElement) {
             // Wait for parent to be visible. We cannot wait for group items because they have visibility hidden.
@@ -508,6 +612,17 @@ export class AddonQtypeDdwtosQuestion {
             this.padToWidthHeight(item, maxWidth, maxHeight);
         });
 
+        this.setSizeForDropGroups(groupNo, maxWidth, maxHeight);
+    }
+
+    /**
+     * Set the padding size for a specific group in the dropped area.
+     *
+     * @param groupNo Group number.
+     * @param width Width to set.
+     * @param height Height to set.
+     */
+    setSizeForDropGroups(groupNo: number, maxWidth: number, maxHeight: number): void {
         const dropsGroup = Array.from(this.container.querySelectorAll<HTMLElement>(this.selectors.dropsGroup(groupNo)));
         dropsGroup.forEach((item) => {
             this.padToWidthHeight(item, maxWidth + 2, maxHeight + 2);

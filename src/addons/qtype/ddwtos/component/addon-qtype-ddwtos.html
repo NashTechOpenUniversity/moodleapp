@@ -14,7 +14,7 @@
                 [contextInstanceId]="contextInstanceId" [courseId]="courseId" #questiontext (afterRender)="textRendered()" />
 
             <core-format-text *ngIf="question.answers" [component]="component" [componentId]="componentId" [text]="question.answers"
-                [filter]="false" (afterRender)="answersRendered()" />
+                [contextLevel]="contextLevel" [contextInstanceId]="contextInstanceId" (afterRender)="answersRendered()" />
 
             <div class="drags"></div>
         </div>
